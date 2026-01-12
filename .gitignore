@@ -1,0 +1,51 @@
+# 添加你的目标文件
+/target
+**/target/
+
+# 这些是编译文件和构建产物
+Cargo.lock
+*.o
+*.so
+*.rlib
+*.dll
+*.lib
+*.exe
+*.pdb
+*.dSYM/
+
+# 移除这些文件，因为它们来自构建工具
+.deploy/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 移除这些文件，因为它们是从构建工具自动生成的
+**/*.rs.bk
+
+# 移除 Cargo 的构建输出
+target/
+
+# 移除 Rust 的文档输出
+/doc/
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
+
+# 编辑器/IDE 文件
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 环境文件
+.env
+*.env
+
+# 日志文件
+*.log
+
+# 覆盖测试覆盖率文件
+*.profraw

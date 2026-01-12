@@ -1,0 +1,12 @@
+[workspace]
+members = ["client", "server"]
+
+[workspace.dependencies]
+
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+bytes = "1.0"
+futures = "0.3.31" # 用于高效处理字节数据
+fory = "0.14.1"
+fory-derive = "0.14.1"
+fory-core = "0.14.1"
