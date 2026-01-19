@@ -1,2 +1,3 @@
 pub mod model;
-mod network;
+pub mod network;
+pub mod raft;

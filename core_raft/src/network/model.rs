@@ -1,7 +1,7 @@
 use std::fmt;
 
 /// A request to the KV store.
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub enum Request {
     Set { key: String, value: String },
 }

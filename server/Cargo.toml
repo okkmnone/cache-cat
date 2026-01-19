@@ -12,3 +12,4 @@ fory-core.workspace = true
 serde_yaml.workspace = true
 serde.workspace = true
 moka.workspace = true
+openraft = { git = "https://github.com/databendlabs/openraft", tag = "v0.10.0-alpha.13", features = ["type-alias"] }

@@ -1,5 +1,6 @@
 use fory_core::Fory;
 use fory_derive::ForyObject;
+use openraft::raft::AppendEntriesRequest;
 use std::sync::Arc;
 
 pub fn fory_init() -> Result<Arc<Fory>, Box<dyn std::error::Error>> {
@@ -63,3 +64,4 @@ pub struct ExistsReq {
 pub struct ExistsRes {
     pub num: u32,
 }
+
