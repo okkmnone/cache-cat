@@ -56,7 +56,7 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
     async fn append_entries(
         &mut self,
         rpc: AppendEntriesRequest<TypeConfig>,
-        option: RPCOption,
+        _option: RPCOption,
     ) -> Result<AppendEntriesResponse<TypeConfig>, RPCError<TypeConfig>> {
         let a = rpc.vote.leader_id.node_id;
         let b = rpc.vote.leader_id.term;

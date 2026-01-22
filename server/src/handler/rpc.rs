@@ -22,7 +22,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         println!("接收到来自 {} 的新连接", addr);
         let fory = Arc::clone(&fory);
-        //为每个连接生成异步任务
+        //为每个tcp连接生成异步任务
         tokio::spawn(async move {
             let mut buffer = BytesMut::with_capacity(1024); //缓冲区
             loop {
@@ -48,6 +48,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     eprintln!("处理请求失败 {}", addr);
                     return;
                 }
+
             }
         });
     }
