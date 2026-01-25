@@ -7,6 +7,8 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
+use crate::network::model::{Request, Response};
+use crate::server::handler::model::SetRes;
 use futures::Stream;
 use futures::TryStreamExt;
 use futures::lock::Mutex;
@@ -21,7 +23,6 @@ use openraft::StoredMembership;
 use openraft::storage::EntryResponder;
 use openraft::storage::RaftStateMachine;
 use openraft::storage::Snapshot;
-use crate::network::model::{Request, Response};
 
 #[derive(Debug)]
 pub struct StoredSnapshot<C: RaftTypeConfig> {
@@ -32,7 +33,7 @@ pub struct StoredSnapshot<C: RaftTypeConfig> {
 }
 
 /// Data contained in the Raft state machine.
-#[derive( Debug, Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct StateMachineData {
     /// Application data.
     pub data: BTreeMap<String, String>,
@@ -99,18 +100,24 @@ impl<C: RaftTypeConfig> StateMachineStore<C> {
 }
 
 impl<C> RaftSnapshotBuilder<C> for StateMachineStore<C>
-where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>>, Entry = Entry<C>>
+where
+    C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>>, Entry = Entry<C>>,
 {
     #[tracing::instrument(level = "trace", skip(self))]
     async fn build_snapshot(&mut self) -> Result<Snapshot<C>, io::Error> {
         let mut inner = self.0.lock().await;
 
-        let data =
-            serde_json::to_vec(&inner.state_machine.data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let data = serde_json::to_vec(&inner.state_machine.data)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let snapshot_idx = inner.next_snapshot_idx();
         let snapshot_id = if let Some(last) = inner.last_applied_log.clone() {
-            format!("{}-{}-{}", last.committed_leader_id(), last.index(), snapshot_idx)
+            format!(
+                "{}-{}-{}",
+                last.committed_leader_id(),
+                last.index(),
+                snapshot_idx
+            )
         } else {
             format!("--{}", snapshot_idx)
         };
@@ -136,18 +143,26 @@ where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>
 }
 
 impl<C> RaftStateMachine<C> for StateMachineStore<C>
-where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>>, Entry = Entry<C>>
+where
+    C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>>, Entry = Entry<C>>,
 {
     type SnapshotBuilder = Self;
 
-    async fn applied_state(&mut self) -> Result<(Option<LogId<C>>, StoredMembership<C>), io::Error> {
+    async fn applied_state(
+        &mut self,
+    ) -> Result<(Option<LogId<C>>, StoredMembership<C>), io::Error> {
         let inner = self.0.lock().await;
-        Ok((inner.last_applied_log.clone(), inner.last_membership.clone()))
+        Ok((
+            inner.last_applied_log.clone(),
+            inner.last_membership.clone(),
+        ))
     }
 
     #[tracing::instrument(level = "trace", skip(self, entries))]
     async fn apply<Strm>(&mut self, mut entries: Strm) -> Result<(), io::Error>
-    where Strm: Stream<Item = Result<EntryResponder<C>, io::Error>> + Unpin + OptionalSend {
+    where
+        Strm: Stream<Item = Result<EntryResponder<C>, io::Error>> + Unpin + OptionalSend,
+    {
         let mut inner = self.0.lock().await;
 
         while let Some((entry, responder)) = entries.try_next().await? {
@@ -158,13 +173,19 @@ where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>
             let response = match &entry.payload {
                 EntryPayload::Blank => Response::none(),
                 EntryPayload::Normal(req) => match req {
-                    Request::Set { key, value } => {
-                        inner.state_machine.data.insert(key.clone(), value.clone());
-                        Response::new(value.clone())
+                    Request::Set(set_req) => {
+                        // 使用结构体的字段名来访问成员
+                        inner.state_machine.data.insert(
+                            set_req.key.clone(),
+                            String::try_from(set_req.value.clone()).unwrap(),
+                        );
+                        // 注意：原代码返回的是 value.clone()，现在根据你的业务需求可能需要调整
+                        Response::Set(SetRes {})
                     }
                 },
                 EntryPayload::Membership(mem) => {
-                    inner.last_membership = StoredMembership::new(Some(entry.log_id.clone()), mem.clone());
+                    inner.last_membership =
+                        StoredMembership::new(Some(entry.log_id.clone()), mem.clone());
                     Response::none()
                 }
             };
@@ -182,7 +203,11 @@ where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>
     }
 
     #[tracing::instrument(level = "trace", skip(self, snapshot))]
-    async fn install_snapshot(&mut self, meta: &SnapshotMeta<C>, snapshot: C::SnapshotData) -> Result<(), io::Error> {
+    async fn install_snapshot(
+        &mut self,
+        meta: &SnapshotMeta<C>,
+        snapshot: C::SnapshotData,
+    ) -> Result<(), io::Error> {
         tracing::info!(
             { snapshot_size = snapshot.get_ref().len() },
             "decoding snapshot for installation"
@@ -194,7 +219,8 @@ where C: RaftTypeConfig<D = Request, R = Response, SnapshotData = Cursor<Vec<u8>
         };
 
         let updated_state_machine_data: BTreeMap<String, String> =
-            serde_json::from_slice(&new_snapshot.data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            serde_json::from_slice(&new_snapshot.data)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         let mut inner = self.0.lock().await;
         inner.last_applied_log = meta.last_log_id.clone();

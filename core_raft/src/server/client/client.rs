@@ -1,11 +1,8 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut};
 use bincode2;
-use serde::de::DeserializeOwned;
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use serde::Serialize;
-use server::share::model::{
-    DelReq, DelRes, ExistsReq, ExistsRes, GetReq, GetRes, PrintTestReq, PrintTestRes, SetReq,
-    SetRes,
-};
+use serde::de::DeserializeOwned;
+
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -44,9 +41,9 @@ impl RpcClient {
         let length = (4 + 4 + payload.len()) as u32;
 
         let mut buf = BytesMut::with_capacity(12 + payload.len());
-        buf.put_u32(length);        // frame length
-        buf.put_u32(request_id);    // request id
-        buf.put_u32(func_id);       // func id
+        buf.put_u32(length); // frame length
+        buf.put_u32(request_id); // request id
+        buf.put_u32(func_id); // func id
         buf.extend_from_slice(&payload);
 
         // ---------- 发送 ----------
@@ -74,4 +71,3 @@ impl RpcClient {
         Ok(res)
     }
 }
-

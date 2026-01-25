@@ -1,42 +1,39 @@
-use std::fmt;
+use crate::server::handler::model::{SetReq, SetRes};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 /// A request to the KV store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Request {
-    Set { key: String, value: String },
+    Set(SetReq),
 }
 impl Request {
     pub fn set(key: impl Into<String>, value: impl Into<String>) -> Self {
-        Request::Set {
+        Request::Set(SetReq {
             key: key.into(),
-            value: value.into(),
-        }
+            value: Vec::from(value.into()),
+            ex_time: 100000,
+        })
     }
 }
 
 impl fmt::Display for Request {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Request::Set { key, value } => write!(f, "Set {{ key: {}, value: {} }}", key, value),
+            Request::Set(req) => write!(f, "Set: {}", req),
         }
     }
 }
 
 /// A response from the KV store.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Response {
-    pub value: Option<String>,
+pub enum Response {
+    Set(SetRes),
+    Null,
 }
 
 impl Response {
-    pub fn new(value: impl Into<String>) -> Self {
-        Response {
-            value: Some(value.into()),
-        }
-    }
-
     pub fn none() -> Self {
-        Response { value: None }
+        Response::Null
     }
 }

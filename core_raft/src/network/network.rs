@@ -1,9 +1,5 @@
 use crate::network::raft::TypeConfig;
-use client::client::RpcClient;
-use fory_core::{ForyDefault, Serializer};
-use fory_derive::ForyObject;
 use openraft::alias::VoteOf;
-use openraft::entry::RaftPayload;
 use openraft::error::{RPCError, ReplicationClosed, StreamingError};
 use openraft::network::RPCOption;
 use openraft::raft::{
@@ -14,14 +10,14 @@ use openraft::{
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::fmt::Display;
-use tokio::io::{AsyncRead, AsyncSeek, AsyncWrite};
+use crate::server::client::client::RpcClient;
+
 pub struct NetworkFactory {}
 impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
     type Network = TcpNetwork;
     #[tracing::instrument(level = "debug", skip_all)]
     async fn new_client(&mut self, target: u64, node: &BasicNode) -> Self::Network {
-        let client = RpcClient::connect("127.0.0.1:8080").await.unwrap();
+        let client = RpcClient::connect(&*node.addr.clone()).await.unwrap();
         TcpNetwork {
             addr: node.addr.clone(),
             client,
@@ -42,13 +38,13 @@ impl TcpNetwork {
         req: Req,
     ) -> Result<Result<Resp, Err>, RPCError<TypeConfig>>
     where
-        Req: Serializer + ForyDefault,
-        Resp: Serializer + ForyDefault,
+        Req: Serialize + 'static,
+        Resp: Serialize + DeserializeOwned,
         Err: std::error::Error + Serialize + DeserializeOwned,
     {
-        // let res = (self.client).call(func_id, req).await.unwrap();
-        // Ok(res)
-        todo!()
+        let res: Result<Result<Resp, Err>, RPCError<TypeConfig>> =
+            self.client.call(func_id, req).await.unwrap();
+        res
     }
 }
 
