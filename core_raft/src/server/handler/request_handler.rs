@@ -1,8 +1,14 @@
+use crate::network::raft::CacheCatApp;
 use crate::server::handler::external_handler::HANDLER_TABLE;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
+use std::sync::Arc;
 use tokio::sync::mpsc::UnboundedSender;
 
-pub async fn hand(tx: UnboundedSender<Bytes>, mut package: Bytes) -> Result<(), ()> {
+pub async fn hand(
+    app: Arc<CacheCatApp>,
+    tx: UnboundedSender<Bytes>,
+    mut package: Bytes,
+) -> Result<(), ()> {
     // 读取 request_id(4) + func_id(4)
     let request_id = u32::from_be_bytes(package[0..4].try_into().unwrap());
     let func_id = u32::from_be_bytes(package[4..8].try_into().unwrap());
@@ -13,8 +19,7 @@ pub async fn hand(tx: UnboundedSender<Bytes>, mut package: Bytes) -> Result<(), 
         .find(|(id, _)| *id == func_id)
         .map(|(_, ctor)| ctor())
         .ok_or(())?;
-    let response_data = handler.call(package);
-
+    let response_data = handler.call(app, package).await;
     let mut response_length = response_data.len() as u32;
     // 协议中 response body 前还有 4 bytes 的 request_id
     response_length = response_length + 4;

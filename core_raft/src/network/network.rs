@@ -1,4 +1,5 @@
 use crate::network::raft::TypeConfig;
+use crate::server::client::client::RpcClient;
 use openraft::alias::VoteOf;
 use openraft::error::{RPCError, ReplicationClosed, StreamingError};
 use openraft::network::RPCOption;
@@ -10,7 +11,6 @@ use openraft::{
 };
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use crate::server::client::client::RpcClient;
 
 pub struct NetworkFactory {}
 impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
@@ -48,6 +48,7 @@ impl TcpNetwork {
     }
 }
 
+//openraft会自动调用这个方法
 impl RaftNetworkV2<TypeConfig> for TcpNetwork {
     async fn append_entries(
         &mut self,
@@ -66,7 +67,7 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         rpc: VoteRequest<TypeConfig>,
         option: RPCOption,
     ) -> Result<VoteResponse<TypeConfig>, RPCError<TypeConfig>> {
-        todo!()
+        self.client.call(1, rpc).await.unwrap()
     }
     // 只是一个标识，并不真正进行快照
     async fn full_snapshot(

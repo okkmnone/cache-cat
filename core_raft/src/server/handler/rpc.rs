@@ -1,12 +1,14 @@
+use crate::network::raft::CacheCatApp;
 use crate::server::core::config::{get_config, init_config};
 use crate::server::core::moka::init_cache;
 use crate::server::handler::request_handler::hand;
 use bytes::{Buf, Bytes, BytesMut};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
-pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
+pub async fn start_server(app: Arc<CacheCatApp>) -> Result<(), Box<dyn std::error::Error>> {
     init_config("./server/config.yml")?;
     init_cache();
     let config = get_config();
@@ -35,7 +37,7 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         });
-
+        let app = app.clone();
         // 读任务：处理客户端请求
         tokio::spawn(async move {
             let mut reader = reader;
@@ -59,8 +61,9 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let data_packet = buffer.split_to(data_length as usize);
                 let tx = tx.clone();
                 // 处理请求任务
+                let app = app.clone();
                 tokio::spawn(async move {
-                    match hand(tx, data_packet.freeze()).await {
+                    match hand(app, tx, data_packet.freeze()).await {
                         Ok(_) => {}
                         Err(_) => {
                             eprintln!("处理请求失败 {}", addr);

@@ -2,6 +2,7 @@ use crate::core::config::{get_config, init_config};
 use crate::core::moka::init_cache;
 use crate::handler::request_handler::hand;
 use bytes::{Buf, Bytes, BytesMut};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
@@ -70,4 +71,8 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+}
+
+trait Animal {
+    fn speak(&self);
 }
