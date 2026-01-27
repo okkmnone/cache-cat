@@ -1,16 +1,16 @@
 use crate::network::raft::CacheCatApp;
 use crate::server::core::config::{get_config, init_config};
-use crate::server::core::moka::init_cache;
 use crate::server::handler::request_handler::hand;
 use bytes::{Buf, Bytes, BytesMut};
-use std::sync::Arc;
+use openraft::BasicNode;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpListener;
 use tokio::sync::mpsc;
 
 pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
-    init_config("./server/config.yml");
-    init_cache();
+    let _ = init_config("./server/config.yml");
     let config = get_config();
     let addr = format!("127.0.0.1:{}", config.port);
     let listener = TcpListener::bind(app.addr.clone()).await?;
@@ -37,6 +37,7 @@ pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
             }
         });
         let app = app.clone();
+
         // 读任务：处理客户端请求
         tokio::spawn(async move {
             let mut reader = reader;
@@ -44,6 +45,7 @@ pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
             loop {
                 if buffer.len() < 4 {
                     if let Err(e) = reader.read_buf(&mut buffer).await {
+                        //对方异常关闭也会导致这个错误
                         eprintln!("读取长度头失败 ({}): {}", addr, e);
                         break;
                     }

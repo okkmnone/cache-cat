@@ -1,6 +1,6 @@
 use crate::network::raft::TypeConfig;
 use crate::server::client::client::RpcClient;
-use crate::server::handler::model::InstallFullSnapshotReq;
+use crate::server::handler::model::{InstallFullSnapshotReq, PrintTestReq, PrintTestRes};
 use openraft::alias::VoteOf;
 use openraft::error::{RPCError, ReplicationClosed, StreamingError};
 use openraft::network::RPCOption;
@@ -56,7 +56,8 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         rpc: AppendEntriesRequest<TypeConfig>,
         _option: RPCOption,
     ) -> Result<AppendEntriesResponse<TypeConfig>, RPCError<TypeConfig>> {
-        self.client.call(7, rpc).await.unwrap()
+        let res: AppendEntriesResponse<TypeConfig> = self.client.call(7, rpc).await.unwrap();
+        Ok(res)
     }
 
     async fn vote(
@@ -64,7 +65,17 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         rpc: VoteRequest<TypeConfig>,
         option: RPCOption,
     ) -> Result<VoteResponse<TypeConfig>, RPCError<TypeConfig>> {
-        self.client.call(6, rpc).await.unwrap()
+        // let req = PrintTestReq {
+        //     message: "test".to_string(),
+        // };
+        // let x: PrintTestRes = self.client.call(1, req).await.unwrap();
+        // println!("{}", x.message);
+
+        let res: VoteResponse<TypeConfig> = self.client.call(6, rpc).await.unwrap_or_else(|e| {
+            eprintln!("RPC call failed: {:?}", e);
+            panic!("RPC call failed");
+        });
+        Ok(res)
     }
     // 只是一个标识，并不真正进行快照
     async fn full_snapshot(

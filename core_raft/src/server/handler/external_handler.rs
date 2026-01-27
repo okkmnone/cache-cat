@@ -1,5 +1,4 @@
 use crate::network::raft::{CacheCatApp, TypeConfig};
-use crate::server::core::moka::{MyValue, get_cache};
 use crate::server::handler::model::{
     DelReq, DelRes, ExistsReq, ExistsRes, GetReq, GetRes, InstallFullSnapshotReq, PrintTestReq,
     PrintTestRes, SetReq, SetRes,
@@ -7,7 +6,10 @@ use crate::server::handler::model::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use openraft::Snapshot;
-use openraft::raft::{AppendEntriesRequest, InstallSnapshotRequest, VoteRequest, VoteResponse};
+use openraft::raft::{
+    AppendEntriesRequest, AppendEntriesResponse, InstallSnapshotRequest, InstallSnapshotResponse,
+    SnapshotResponse, VoteRequest, VoteResponse,
+};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::io::Cursor;
@@ -17,10 +19,6 @@ pub type HandlerEntry = (u32, fn() -> Box<dyn RpcHandler>);
 
 pub static HANDLER_TABLE: &[HandlerEntry] = &[
     (1, || Box::new(RpcMethod { func: print_test })),
-    (2, || Box::new(RpcMethod { func: set })),
-    (3, || Box::new(RpcMethod { func: get })),
-    (4, || Box::new(RpcMethod { func: del })),
-    (5, || Box::new(RpcMethod { func: exists })),
     (6, || Box::new(RpcMethod { func: vote })),
     (7, || {
         Box::new(RpcMethod {
@@ -76,54 +74,25 @@ async fn print_test(_app: Arc<CacheCatApp>, d: PrintTestReq) -> PrintTestRes {
     PrintTestRes { message: d.message }
 }
 
-async fn set(_app: Arc<CacheCatApp>, req: SetReq) -> SetRes {
-    let cache = get_cache();
-    let v = MyValue {
-        data: Arc::new(req.value),
-        ttl_ms: req.ex_time,
-    };
-    cache.insert(req.key, v);
-    SetRes {}
-}
-
-async fn get(_app: Arc<CacheCatApp>, req: GetReq) -> GetRes {
-    let cache = get_cache();
-    let a = cache.get(&req.key);
-    GetRes {
-        value: a.map(|v| v.data.clone()),
-    }
-}
-
-async fn del(_app: Arc<CacheCatApp>, req: DelReq) -> DelRes {
-    let cache = get_cache();
-    match cache.remove(&req.key) {
-        None => DelRes { num: 0 },
-        Some(_) => DelRes { num: 1 },
-    }
-}
-
-async fn exists(_app: Arc<CacheCatApp>, req: ExistsReq) -> ExistsRes {
-    let cache = get_cache();
-    if cache.contains_key(&req.key) {
-        ExistsRes { num: 1 }
-    } else {
-        ExistsRes { num: 0 }
-    }
-}
-
 async fn vote(app: Arc<CacheCatApp>, req: VoteRequest<TypeConfig>) -> VoteResponse<TypeConfig> {
     // openraft 的 vote 是异步的
     app.raft.vote(req).await.expect("Raft vote failed")
 }
-async fn append_entries(app: Arc<CacheCatApp>, req: AppendEntriesRequest<TypeConfig>) {
+async fn append_entries(
+    app: Arc<CacheCatApp>,
+    req: AppendEntriesRequest<TypeConfig>,
+) -> AppendEntriesResponse<TypeConfig> {
     app.raft
         .append_entries(req)
         .await
-        .expect("Raft append_entries failed");
+        .expect("Raft append_entries failed")
 }
 
 //InstallFullSnapshotReq 把openraft自带的俩个参数包裹在一起了
-async fn install_full_snapshot(app: Arc<CacheCatApp>, req: InstallFullSnapshotReq) {
+async fn install_full_snapshot(
+    app: Arc<CacheCatApp>,
+    req: InstallFullSnapshotReq,
+) -> SnapshotResponse<TypeConfig> {
     let mut snapshot_data_bytes: Vec<u8> = Vec::new();
     let sp = Cursor::new(snapshot_data_bytes);
     let snapshot = Snapshot {
@@ -133,5 +102,5 @@ async fn install_full_snapshot(app: Arc<CacheCatApp>, req: InstallFullSnapshotRe
     app.raft
         .install_full_snapshot(req.vote, snapshot)
         .await
-        .expect("Raft install_snapshot failed");
+        .expect("Raft install_snapshot failed")
 }

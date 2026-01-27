@@ -42,20 +42,38 @@ pub async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut reader = reader;
             let mut buffer = BytesMut::with_capacity(1024);
             loop {
-                if buffer.len() < 4 {
-                    if let Err(e) = reader.read_buf(&mut buffer).await {
-                        eprintln!("读取长度头失败 ({}): {}", addr, e);
+                // 确保缓冲区至少有4字节来读取长度头
+                while buffer.len() < 4 {
+                    let bytes_read = reader.read_buf(&mut buffer).await.unwrap();
+                    if bytes_read == 0 {
+                        // 对端关闭连接
                         break;
                     }
-                    continue;
                 }
-                let data_length = u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]);
+
+                // 检查是否成功读取了足够的长度头数据
+                if buffer.len() < 4 {
+                    // 连接已关闭
+                    break;
+                }
+
+                let data_length =
+                    u32::from_be_bytes([buffer[0], buffer[1], buffer[2], buffer[3]]) as usize;
                 buffer.advance(4);
-                while buffer.len() < data_length as usize {
-                    if let Err(e) = reader.read_buf(&mut buffer).await {
-                        eprintln!("读取数据体失败 ({}): {}", addr, e);
+
+                // 读取完整的数据包
+                while buffer.len() < data_length {
+                    let bytes_read = reader.read_buf(&mut buffer).await.unwrap();
+                    if bytes_read == 0 {
+                        // 对端关闭连接
                         break;
                     }
+                }
+
+                // 检查是否成功读取了完整的数据包
+                if buffer.len() < data_length {
+                    // 连接中断或数据不完整
+                    break;
                 }
                 let data_packet = buffer.split_to(data_length as usize);
                 let tx = tx.clone();
