@@ -2,9 +2,13 @@ use core_raft::network;
 use core_raft::network::raft_rocksdb::TypeConfig;
 use openraft::AsyncRuntime;
 use openraft::alias::AsyncRuntimeOf;
-use std::{fs, thread};
 use std::time::Duration;
+use std::{fs, thread};
+use mimalloc::MiMalloc;
 use tracing_subscriber::EnvFilter;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

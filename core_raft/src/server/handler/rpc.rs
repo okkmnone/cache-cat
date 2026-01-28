@@ -12,8 +12,8 @@ use futures::{SinkExt, StreamExt};
 
 pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
     // 初始化配置（保留原有逻辑）
-    let _ = init_config("./server/config.yml");
-    let config = get_config();
+    // let _ = init_config("./server/config.yml");
+    // let config = get_config();
     let bind_addr = app.addr.clone(); // 保持与原代码一致，使用 app.addr
     let listener = TcpListener::bind(bind_addr).await?;
     println!("Listening on: {}", listener.local_addr()?);

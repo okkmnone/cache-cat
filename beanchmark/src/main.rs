@@ -1,13 +1,13 @@
-use crate::network::model::Request;
-use crate::network::raft_rocksdb::TypeConfig;
-use crate::server::client::client::RpcClient;
-use crate::server::handler::model::{PrintTestReq, PrintTestRes, SetReq};
+use core_raft::network::model::Request;
+use core_raft::network::raft_rocksdb::TypeConfig;
+use core_raft::server::client::client::RpcClient;
+use core_raft::server::handler::model::{PrintTestReq, PrintTestRes, SetReq};
 use openraft::raft::ClientWriteResponse;
 use std::time::{Duration, Instant};
 use tokio::time;
 
-#[tokio::test]
-async fn test_add() {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>>{
     let mut client = RpcClient::connect("127.0.0.1:3003").await.unwrap();
 
     let mut total_elapsed = Duration::new(0, 0);
@@ -51,14 +51,5 @@ async fn test_add() {
         println!("第{}次 - 微秒: {}", i + 1, elapsed.as_micros())
     }
     println!("写入操作平均耗时: {} 微秒", avg_elapsed.as_micros());
-
-    // 验证读取操作
-    // let start = Instant::now();
-    // let res: Option<String> = client
-    //     .call(3, "test_0".to_string()) // 读取第一个插入的值
-    //     .await
-    //     .expect("call failed");
-    // println!("读取结果: {:?}", res.expect("res is none"));
-    // let elapsed = start.elapsed();
-    // println!("读取耗时: {} 微秒", elapsed.as_micros());
+    Ok(())
 }

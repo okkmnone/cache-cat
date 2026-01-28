@@ -1,5 +1,5 @@
 [workspace]
-members = ["client", "core_raft", "server"]
+members = ["beanchmark", "core_raft", ]
 
 [workspace.dependencies]
 
@@ -12,4 +12,4 @@ fory-derive = "0.14.1"
 fory-core = "0.14.1"
 serde_yaml = "0.9.34+deprecated"
 moka = { version = "0.12.12", features = ["sync"] }
-serde = { version = "1.0.228", features = ["derive","rc"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
