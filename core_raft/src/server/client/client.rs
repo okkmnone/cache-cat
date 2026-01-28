@@ -159,7 +159,7 @@ impl RpcClient {
         }
 
         // 6. 等待响应
-        // let start = Instant::now();
+        let start = Instant::now();
         let response_bytes = match rx.await {
             Ok(bytes) => bytes,
             Err(_) => {
@@ -167,7 +167,7 @@ impl RpcClient {
                 return Err("RPC wait timeout or connection closed".into());
             }
         };
-        // tracing::info!("RPC 往返耗时: {} us", start.elapsed().as_micros());
+        tracing::info!("RPC 往返耗时: {} us", start.elapsed().as_micros());
 
         // 7. 反序列化
         let res: Res = bincode2::deserialize(&response_bytes)?;

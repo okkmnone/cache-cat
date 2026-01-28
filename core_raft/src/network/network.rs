@@ -60,7 +60,7 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
     ) -> Result<AppendEntriesResponse<TypeConfig>, RPCError<TypeConfig>> {
         let start = Instant::now();
         let res: AppendEntriesResponse<TypeConfig> = self.client.call(7, rpc).await.unwrap();
-        // tracing::info!("append_entries: {} 微秒", start.elapsed().as_micros());
+        tracing::info!("append_entries 整体使用时间: {} 微秒", start.elapsed().as_micros());
         Ok(res)
     }
 

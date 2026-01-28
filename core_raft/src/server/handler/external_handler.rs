@@ -95,6 +95,7 @@ async fn vote(app: Arc<CacheCatApp>, req: VoteRequest<TypeConfig>) -> VoteRespon
 }
 
 //理论上只有从节点会被调用这个方法
+#[tracing::instrument(level = "trace", skip_all)]
 async fn append_entries(
     app: Arc<CacheCatApp>,
     req: AppendEntriesRequest<TypeConfig>,
