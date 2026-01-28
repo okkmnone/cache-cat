@@ -100,14 +100,16 @@ async fn append_entries(
     req: AppendEntriesRequest<TypeConfig>,
 ) -> AppendEntriesResponse<TypeConfig> {
     let start = Instant::now();
-
+    let e = req.entries.is_empty();
     let res = app
         .raft
         .append_entries(req)
         .await
         .expect("Raft append_entries failed");
     let elapsed = start.elapsed();
-    tracing::info!("append 从节点内部处理: {:?} 节点：{:?}", elapsed, app.id);
+    if !e {
+        tracing::warn!("append 从节点内部处理: {:?} 节点：{:?}", elapsed, app.id);
+    }
 
     res
 }

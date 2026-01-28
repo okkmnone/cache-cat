@@ -5,6 +5,7 @@ use openraft::alias::AsyncRuntimeOf;
 use std::time::Duration;
 use std::{fs, thread};
 use mimalloc::MiMalloc;
+use tempfile::TempDir;
 use tracing_subscriber::EnvFilter;
 
 #[global_allocator]
@@ -12,14 +13,16 @@ static GLOBAL: MiMalloc = MiMalloc;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let base = r"E:\tmp\raft\rocks";
-
-    // 确保父目录存在（很重要）
+    // let base = r"E:\tmp\raft\rocks";
+    let base_dir = tempfile::tempdir()?;
+    let base = base_dir.path();
+    // 确保临时目录存在
     fs::create_dir_all(base)?;
 
-    let d1 = tempfile::TempDir::new_in(base)?;
-    let d2 = tempfile::TempDir::new_in(base)?;
-    let d3 = tempfile::TempDir::new_in(base)?;
+    // 在临时目录下创建每个节点的子目录
+    let d1 = TempDir::new_in(base)?;
+    let d2 = TempDir::new_in(base)?;
+    let d3 = TempDir::new_in(base)?;
     // Setup the logger
     tracing_subscriber::fmt()
         .with_target(true)
@@ -27,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_level(true)
         .with_ansi(false)
         .with_env_filter(EnvFilter::from_default_env())
-        // .with_max_level(tracing::Level::INFO)
+        .with_max_level(tracing::Level::WARN)
         .init();
     let _h1 = thread::spawn(move || {
         let mut rt = AsyncRuntimeOf::<TypeConfig>::new(1);

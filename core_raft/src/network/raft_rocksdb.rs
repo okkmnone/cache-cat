@@ -17,6 +17,7 @@ openraft::declare_raft_types!(
         R = Response,
         Entry = openraft::Entry<TypeConfig>,
         SnapshotData = Cursor<Vec<u8>>,
+        
 );
 //实现是纯内存的暂时
 pub type LogStore = crate::store::rocks_log_store::RocksLogStore<TypeConfig>;

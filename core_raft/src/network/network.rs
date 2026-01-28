@@ -80,12 +80,6 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         rpc: VoteRequest<TypeConfig>,
         option: RPCOption,
     ) -> Result<VoteResponse<TypeConfig>, RPCError<TypeConfig>> {
-        // let req = PrintTestReq {
-        //     message: "test".to_string(),
-        // };
-        // let x: PrintTestRes = self.client.call(1, req).await.unwrap();
-        // println!("{}", x.message);
-
         let res: VoteResponse<TypeConfig> = self.client.call(6, rpc).await.unwrap_or_else(|e| {
             eprintln!("RPC call failed: {:?}", e);
             panic!("RPC call failed");
