@@ -110,12 +110,13 @@ impl StateMachineStore {
 
         let snapshot = sm.get_current_snapshot_()?;
         if let Some(snap) = snapshot {
+            //当存在快照的时候才会恢复状态机
             sm.update_state_machine_(snap).await?;
         }
-
         Ok(sm)
     }
 
+    //
     async fn update_state_machine_(&mut self, snapshot: StoredSnapshot) -> Result<(), io::Error> {
         let kvs: BTreeMap<String, String> = bincode2::deserialize(&snapshot.data)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
@@ -230,7 +231,6 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
         };
 
         self.update_state_machine_(new_snapshot.clone()).await?;
-
         self.set_current_snapshot_(new_snapshot)?;
 
         Ok(())
@@ -245,9 +245,7 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
     }
 }
 
-pub(crate) async fn new_storage<P: AsRef<Path>>(
-    db_path: P,
-) -> (RocksLogStore, StateMachineStore) {
+pub(crate) async fn new_storage<P: AsRef<Path>>(db_path: P) -> (RocksLogStore, StateMachineStore) {
     let mut db_opts = Options::default();
     db_opts.create_missing_column_families(true);
     db_opts.create_if_missing(true);
@@ -255,7 +253,7 @@ pub(crate) async fn new_storage<P: AsRef<Path>>(
     let store = ColumnFamilyDescriptor::new("store", Options::default());
     let meta = ColumnFamilyDescriptor::new("meta", Options::default());
     let logs = ColumnFamilyDescriptor::new("logs", Options::default());
-
+    //打开多个数据库并创建列族
     let db = DB::open_cf_descriptors(&db_opts, db_path, vec![store, meta, logs]).unwrap();
     let db = Arc::new(db);
 

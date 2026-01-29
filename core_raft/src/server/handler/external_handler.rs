@@ -94,7 +94,6 @@ async fn vote(app: Arc<CacheCatApp>, req: VoteRequest<TypeConfig>) -> VoteRespon
 }
 
 //理论上只有从节点会被调用这个方法
-#[tracing::instrument(level = "trace", skip_all)]
 async fn append_entries(
     app: Arc<CacheCatApp>,
     req: AppendEntriesRequest<TypeConfig>,
@@ -108,9 +107,8 @@ async fn append_entries(
         .expect("Raft append_entries failed");
     let elapsed = start.elapsed();
     if !e {
-        tracing::warn!("append 从节点内部处理: {:?} 节点：{:?}", elapsed, app.id);
+        tracing::info!("append 从节点内部处理: {:?} 节点：{:?}", elapsed, app.id);
     }
-
     res
 }
 
@@ -119,11 +117,9 @@ async fn install_full_snapshot(
     app: Arc<CacheCatApp>,
     req: InstallFullSnapshotReq,
 ) -> SnapshotResponse<TypeConfig> {
-    let mut snapshot_data_bytes: Vec<u8> = Vec::new();
-    let sp = Cursor::new(snapshot_data_bytes);
     let snapshot = Snapshot {
         meta: req.snapshot_meta,
-        snapshot: sp,
+        snapshot: Cursor::new(req.snapshot),
     };
     app.raft
         .install_full_snapshot(req.vote, snapshot)
