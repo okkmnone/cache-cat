@@ -2,8 +2,9 @@ use crate::network::raft_rocksdb::TypeConfig;
 use byteorder::BigEndian;
 use byteorder::ReadBytesExt;
 use byteorder::WriteBytesExt;
+use indexmap::IndexMap;
+use lru::LruCache;
 use meta::StoreMeta;
-use openraft::LogState;
 use openraft::OptionalSend;
 use openraft::RaftLogReader;
 use openraft::RaftTypeConfig;
@@ -14,6 +15,7 @@ use openraft::entry::RaftEntry;
 use openraft::storage::IOFlushed;
 use openraft::storage::RaftLogStorage;
 use openraft::type_config::TypeConfigExt;
+use openraft::{Entry, LogState};
 use rocksdb::ColumnFamily;
 use rocksdb::DB;
 use rocksdb::Direction;
@@ -21,16 +23,17 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::io;
 use std::marker::PhantomData;
+use std::num::NonZeroUsize;
 use std::ops::RangeBounds;
-use std::sync::{Arc};
+use std::sync::Arc;
 use std::time::Instant;
-use indexmap::IndexMap;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, MutexGuard, RwLock};
 
+const MEM_LOG_SIZE: usize = 2000;
 #[derive(Debug, Clone)]
 pub struct RocksLogStore {
     db: Arc<DB>,
-    cache: Arc<RwLock<IndexMap<u64, EntryOf<TypeConfig>>>>,
+    cache: Arc<Mutex<LruCache<u64, EntryOf<TypeConfig>>>>,
     _p: PhantomData<TypeConfig>,
 }
 
@@ -41,24 +44,14 @@ impl RocksLogStore {
         db.cf_handle("logs")
             .expect("column family `logs` not found");
 
+        // 明确指定类型
+        let cache: LruCache<u64, EntryOf<TypeConfig>> =
+            LruCache::new(NonZeroUsize::new(MEM_LOG_SIZE).expect("MEM_LOG_SIZE must be > 0"));
+
         Self {
             db,
-            cache: Default::default(),
+            cache: Arc::new(Mutex::new(cache)),
             _p: Default::default(),
-        }
-    }
-
-
-    /// Insert entry into cache and evict oldest until capacity 100.
-    async fn cache_insert(&mut self, entry: EntryOf<TypeConfig>) {
-        let idx = entry.index();
-        let mut cache =self.cache.write().await;
-        // If the key already exists, replace the value (keep order).
-        cache.insert(idx, entry);
-        // Evict oldest while size > 100
-        while cache.len() > 100 {
-            // remove first inserted (oldest)
-            cache.shift_remove_index(0);
         }
     }
 
@@ -100,12 +93,12 @@ impl RocksLogStore {
 
         // quick check: if requested length is larger than cache capacity -> miss
         let len_needed = end.saturating_sub(start).saturating_add(1);
-        if len_needed as usize > 100 {
+        if len_needed as usize > MEM_LOG_SIZE {
             return None;
         }
 
         let mut out = Vec::with_capacity(len_needed as usize);
-        let cache = self.cache.read().await;
+        let mut cache: MutexGuard<LruCache<u64, Entry<TypeConfig>>> = self.cache.lock().await;
         for idx in start..=end {
             match cache.get(&idx) {
                 Some(ent) => out.push(ent.clone()),
@@ -114,7 +107,6 @@ impl RocksLogStore {
         }
         Some(out)
     }
-
 
     fn cf_meta(&self) -> &ColumnFamily {
         self.db.cf_handle("meta").unwrap()
@@ -160,10 +152,18 @@ impl RaftLogReader<TypeConfig> for RocksLogStore {
         range: RB,
     ) -> Result<Vec<<TypeConfig as RaftTypeConfig>::Entry>, io::Error> {
         if let Some(cached) = self.try_get_from_cache(range.clone()).await {
-            tracing::debug!("cache hit for range");
+            tracing::info!(
+                "cache hit for range start={:?},end ={:?}",
+                range.start_bound(),
+                range.end_bound()
+            );
             return Ok(cached);
         }
-        tracing::warn!("start={:?},end ={:?}",range.start_bound(),range.end_bound());
+        tracing::warn!(
+            "start={:?},end ={:?}",
+            range.start_bound(),
+            range.end_bound()
+        );
         let start = match range.start_bound() {
             std::ops::Bound::Included(x) => id_to_bin(*x),
             std::ops::Bound::Excluded(x) => id_to_bin(*x + 1),
@@ -236,7 +236,7 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
             db.flush_wal(true)
                 .map_err(|e| io::Error::other(e.to_string()))
         })
-            .await??;
+        .await??;
         Ok(())
     }
 
@@ -250,6 +250,7 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
         I: IntoIterator<Item = EntryOf<TypeConfig>> + Send,
     {
         let start = Instant::now();
+        let mut cache = self.cache.lock().await;
         for entry in entries {
             let id = id_to_bin(entry.index());
             self.db
@@ -260,8 +261,10 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
                 )
                 .map_err(|e| io::Error::other(e.to_string()))?;
-            self.cache_insert(entry);
+            cache.put(entry.index(), entry);
         }
+        //提前释放
+        drop(cache);
         // 在调用回调函数之前，确保日志已经持久化到磁盘。
         //
         // 但上面的 `pub_cf()` 必须在这个函数中调用，而不能放到另一个任务里。
@@ -273,7 +276,6 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
             let elapsed = start.elapsed();
             tracing::info!("rocksdb append elapsed: {:?}", elapsed);
         });
-
         // Return now, and the callback will be invoked later when IO is done.
         Ok(())
     }
