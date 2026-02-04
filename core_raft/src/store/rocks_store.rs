@@ -249,6 +249,28 @@ pub(crate) async fn new_storage<P: AsRef<Path>>(db_path: P) -> (RocksLogStore, S
     let mut db_opts = Options::default();
     db_opts.create_missing_column_families(true);
     db_opts.create_if_missing(true);
+    //设置常见的优化
+
+    db_opts.set_use_direct_io_for_flush_and_compaction(true);
+    // db_opts.set_use_direct_reads(true);
+    db_opts.set_max_background_jobs((std::thread::available_parallelism().unwrap().get() / 4) as i32);//def 2
+    db_opts.set_enable_pipelined_write(true);// 启用流水线写入，并发大时写入性能更高
+    //l0
+    db_opts.set_level_zero_file_num_compaction_trigger(8);//默认是4
+    db_opts.set_level_zero_slowdown_writes_trigger(40);//默认20
+    db_opts.set_level_zero_stop_writes_trigger(48);//def 24
+    db_opts.set_target_file_size_base(256 * 1024 * 1024);//默认为64M
+
+    db_opts.set_min_write_buffer_number_to_merge(2);//def 1 将多个 Memtable 合并后一起 Flush
+        db_opts.set_compression_per_level(&[
+            rocksdb::DBCompressionType::None,
+            rocksdb::DBCompressionType::None,
+            rocksdb::DBCompressionType::Snappy,
+            rocksdb::DBCompressionType::Snappy,
+            rocksdb::DBCompressionType::Snappy,
+            rocksdb::DBCompressionType::Snappy,
+            rocksdb::DBCompressionType::Snappy,
+        ]);
 
     let store = ColumnFamilyDescriptor::new("store", Options::default());
     let meta = ColumnFamilyDescriptor::new("meta", Options::default());
