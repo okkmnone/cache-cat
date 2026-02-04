@@ -235,7 +235,7 @@ async fn install_full_snapshot(
 ) -> SnapshotResponse<TypeConfig> {
     let snapshot = Snapshot {
         meta: req.snapshot_meta,
-        snapshot: Cursor::new(req.snapshot),
+        snapshot: req.snapshot.clone(),
     };
     app.raft
         .install_full_snapshot(req.vote, snapshot)

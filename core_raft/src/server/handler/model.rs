@@ -5,6 +5,7 @@ use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
 use crate::network::raft_rocksdb::TypeConfig;
+use bytes::Bytes;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PrintTestReq {
@@ -72,7 +73,7 @@ pub struct ExistsRes {
 pub struct InstallFullSnapshotReq {
     pub vote: VoteOf<TypeConfig>,
     pub snapshot_meta: SnapshotMeta<TypeConfig>,
-    pub snapshot: Vec<u8>,
+    pub snapshot: Bytes,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

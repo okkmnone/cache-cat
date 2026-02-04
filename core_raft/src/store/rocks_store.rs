@@ -22,13 +22,14 @@ use rocksdb::Options;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::Mutex;
+use bytes::Bytes;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StoredSnapshot {
     pub meta: openraft::SnapshotMeta<TypeConfig>,
 
     /// The data of the state machine at the time of this snapshot.
-    pub data: Vec<u8>,
+    pub data: Bytes,
 }
 
 #[derive(Debug, Clone)]
@@ -84,14 +85,14 @@ impl RaftSnapshotBuilder<TypeConfig> for StateMachineStore {
 
         let snapshot = StoredSnapshot {
             meta: meta.clone(),
-            data: kv_json.clone(),
+            data: Bytes::from_owner(kv_json),
         };
 
-        self.set_current_snapshot_(snapshot)?;
+        self.set_current_snapshot_(&snapshot)?;
 
         Ok(Snapshot {
             meta,
-            snapshot: Cursor::new(kv_json),
+            snapshot: snapshot.data.clone(),
         })
     }
 }
@@ -111,31 +112,44 @@ impl StateMachineStore {
         let snapshot = sm.get_current_snapshot_()?;
         if let Some(snap) = snapshot {
             //当存在快照的时候才会恢复状态机
-            sm.update_state_machine_(snap).await?;
+            sm.update_state_machine_(&snap).await?;
         }
         Ok(sm)
     }
 
     //
-    async fn update_state_machine_(&mut self, snapshot: StoredSnapshot) -> Result<(), io::Error> {
+    async fn update_state_machine_(&mut self, snapshot: &StoredSnapshot) -> Result<(), io::Error> {
         let kvs: HashMap<String, String> = bincode2::deserialize(&snapshot.data)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         self.data.last_applied_log_id = snapshot.meta.last_log_id;
         self.data.last_membership = snapshot.meta.last_membership.clone();
-        let mut x = self.data.kvs.lock().await;
-        *x = kvs;
+
+        {
+            let mut x = self.data.kvs.lock().await;
+            *x = kvs;
+        }
         Ok(())
     }
 
     fn get_current_snapshot_(&self) -> Result<Option<StoredSnapshot>, io::Error> {
+        /*
         Ok(self
             .db
             .get_cf(self.store(), b"snapshot")
             .map_err(io::Error::other)?
             .and_then(|v| bincode2::deserialize::<StoredSnapshot>(&v).ok()))
+        */
+
+        let mut read_opts = rocksdb::ReadOptions::default();
+        read_opts.set_verify_checksums(false);
+        Ok(self
+            .db
+            .get_pinned_cf_opt(self.store(), b"snapshot", &read_opts)
+            .map_err(io::Error::other)?
+            .and_then(|v| bincode2::deserialize::<StoredSnapshot>(&v).ok()))
     }
 
-    fn set_current_snapshot_(&self, snap: StoredSnapshot) -> Result<(), io::Error> {
+    fn set_current_snapshot_(&self, snap: &StoredSnapshot) -> Result<(), io::Error> {
         self.db
             .put_cf(
                 self.store(),
@@ -179,13 +193,16 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
                     EntryPayload::Blank => WriteResRaft::none(),
                     EntryPayload::Normal(req) => match req {
                         WriteReq::Set(set_req) => {
-                            // 使用结构体的字段名来访问成员
-                            let mut st = self.data.kvs.lock().await;
-                            // println!("set {} = {}", set_req.key,String::from_utf8(set_req.value.clone()).unwrap());
-                            st.insert(
-                                set_req.key.clone(),
-                                String::try_from(set_req.value.clone()).unwrap(),
-                            );
+                            {
+                                // 使用结构体的字段名来访问成员
+                                let mut st = self.data.kvs.lock().await;
+                                // println!("set {} = {}", set_req.key,String::from_utf8(set_req.value.clone()).unwrap());
+                                st.insert(
+                                    set_req.key.clone(),
+                                    String::try_from(set_req.value.clone()).unwrap(),
+                                );
+                            }
+                            
                             // 注意：原代码返回的是 value.clone()，现在根据你的业务需求可能需要调整
                             WriteResRaft::Set(SetRes {})
                         }
@@ -216,8 +233,8 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
         self.clone()
     }
 
-    async fn begin_receiving_snapshot(&mut self) -> Result<Cursor<Vec<u8>>, io::Error> {
-        Ok(Cursor::new(Vec::new()))
+    async fn begin_receiving_snapshot(&mut self) -> Result<Bytes, io::Error> {
+        Ok(Bytes::new())
     }
 
     async fn install_snapshot(
@@ -227,11 +244,11 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
     ) -> Result<(), io::Error> {
         let new_snapshot = StoredSnapshot {
             meta: meta.clone(),
-            data: snapshot.into_inner(),
+            data: snapshot.clone(),
         };
 
-        self.update_state_machine_(new_snapshot.clone()).await?;
-        self.set_current_snapshot_(new_snapshot)?;
+        self.update_state_machine_(&new_snapshot.clone()).await?;
+        self.set_current_snapshot_(&new_snapshot)?;
 
         Ok(())
     }
@@ -240,7 +257,7 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
         let x = self.get_current_snapshot_()?;
         Ok(x.map(|s| Snapshot {
             meta: s.meta.clone(),
-            snapshot: Cursor::new(s.data.clone()),
+            snapshot: s.data.clone(),
         }))
     }
 }

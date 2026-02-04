@@ -9,6 +9,7 @@ use std::io::Cursor;
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
 use tokio::sync::Mutex;
+use bytes::Bytes;
 
 openraft::declare_raft_types!(
     /// Declare the type configuration for example K/V store.
@@ -16,7 +17,7 @@ openraft::declare_raft_types!(
         D = WriteReq,
         R = WriteResRaft,
         Entry = openraft::Entry<TypeConfig>,
-        SnapshotData = Cursor<Vec<u8>>,
+        SnapshotData = Bytes,
         
 );
 //实现是纯内存的暂时
