@@ -1,23 +1,41 @@
 use crate::network::network::{NetworkFactory, TcpNetwork};
 use crate::network::raft_rocksdb::{GroupId, NodeId, TypeConfig};
+use crate::server::client::client::RpcMultiClient;
+use crate::server::handler::model::AppendEntriesReq;
+use futures::future::ok;
 use openraft::alias::VoteOf;
 use openraft::error::{RPCError, ReplicationClosed, StreamingError};
 use openraft::network::RPCOption;
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
 };
-use openraft::{OptionalSend, RaftNetworkV2, Snapshot};
-use openraft_multi::GroupRouter;
+use openraft::{OptionalSend, RaftNetworkFactory, RaftNetworkV2, Snapshot};
+use openraft_multi::{GroupNetworkAdapter, GroupNetworkFactory, GroupRouter};
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use tokio::sync::RwLock;
+
+pub type MultiNetworkFactory = GroupNetworkFactory<Router, GroupId>;
+impl RaftNetworkFactory<TypeConfig> for MultiNetworkFactory {
+    type Network = GroupNetworkAdapter<TypeConfig, GroupId, Router>;
+
+    //实际创建连接
+    //TODO 定时重连
+    async fn new_client(&mut self, target: NodeId, node: &openraft::BasicNode) -> Self::Network {
+        let router = self.factory.clone();
+        let client = RpcMultiClient::connect(&*node.addr).await.unwrap();
+        router.nodes.write().await.insert(target, client);
+        GroupNetworkAdapter::new(router, target, self.group_id.clone())
+    }
+}
 
 /// Multi-Raft Router with per-node connection sharing.
 #[derive(Clone, Default)]
 pub struct Router {
     /// Map from node_id to node connection.
-    /// All groups on the same node share this connection.
-    pub nodes: Arc<RwLock<HashMap<NodeId, TcpNetwork>>>,
+    /// 所有节点都有这个nodes副本
+    pub nodes: Arc<RwLock<HashMap<NodeId, RpcMultiClient>>>,
     pub addr: String,
 }
 impl Router {
@@ -27,12 +45,10 @@ impl Router {
             addr,
         }
     }
-    pub async fn register_node(&mut self, node_id: NodeId) {
-        let net = NetworkFactory::new_tcp(node_id, self.addr.to_string()).await;
-        self.nodes.write().await.insert(node_id, net);
-    }
+    // pub async fn register_node(&mut self, node_id: NodeId) {}
 }
 impl GroupRouter<TypeConfig, GroupId> for Router {
+    //只有主节点会调用这个方法
     async fn append_entries(
         &self,
         target: NodeId,
@@ -40,8 +56,20 @@ impl GroupRouter<TypeConfig, GroupId> for Router {
         rpc: AppendEntriesRequest<TypeConfig>,
         option: RPCOption,
     ) -> Result<AppendEntriesResponse<TypeConfig>, RPCError<TypeConfig>> {
-        let x = self.nodes.read().await.get(&target).unwrap();
-        todo!()
+        let req = AppendEntriesReq {
+            append_entries_req: rpc,
+            group_id,
+        };
+        let res = self
+            .nodes
+            .read()
+            .await
+            .get(&target)
+            .unwrap()
+            .call(7, req)
+            .await
+            .unwrap();
+        Ok(res)
     }
 
     async fn vote(

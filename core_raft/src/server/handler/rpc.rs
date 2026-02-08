@@ -1,4 +1,4 @@
-use crate::network::node::CacheCatApp;
+use crate::network::node::{App, CacheCatApp};
 use crate::server::core::config::{get_config, init_config};
 use crate::server::handler::external_handler::HANDLER_TABLE;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -10,12 +10,11 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::codec::{Framed, LengthDelimitedCodec};
 
-pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
+pub async fn start_server(app: App, addr: String) -> std::io::Result<()> {
     // 初始化配置（保留原有逻辑）
     // let _ = init_config("./server/config.yml");
     // let config = get_config();
-    let bind_addr = app.addr.clone(); // 保持与原代码一致，使用 app.addr
-    let listener = TcpListener::bind(bind_addr).await?;
+    let listener = TcpListener::bind(addr).await?;
     println!("Listening on: {}", listener.local_addr()?);
 
     loop {
@@ -90,11 +89,7 @@ pub async fn start_server(app: Arc<CacheCatApp>) -> std::io::Result<()> {
 
 /// hand 函数现在期望接收到的 `package` 已经是不带长度头的一帧数据（即：request_id(4) + func_id(4) + body）
 /// 并通过 tx 发送回写任务一个 payload（也不包含长度头），写任务会交给 codec 自动添加长度头。
-pub async fn hand(
-    app: Arc<CacheCatApp>,
-    tx: UnboundedSender<Bytes>,
-    mut package: Bytes,
-) -> Result<(), ()> {
+pub async fn hand(app: App, tx: UnboundedSender<Bytes>, mut package: Bytes) -> Result<(), ()> {
     // 安全解析：至少需要 8 bytes (request_id + func_id)
     if package.len() < 8 {
         eprintln!("包长度不足：{}", package.len());

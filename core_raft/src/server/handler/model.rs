@@ -1,9 +1,10 @@
 use crate::network::raft_rocksdb::{GroupId, TypeConfig};
 use openraft::alias::VoteOf;
-use openraft::raft::AppendEntriesRequest;
+use openraft::raft::{AppendEntriesRequest, VoteRequest};
 use openraft::{Snapshot, SnapshotMeta};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 use std::sync::Arc;
 
@@ -32,6 +33,11 @@ impl fmt::Display for SetReq {
             self.value.len(),
             self.ex_time
         )
+    }
+}
+impl Hash for SetReq {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.key.hash(state);
     }
 }
 
@@ -73,10 +79,16 @@ pub struct AppendEntriesReq {
     pub append_entries_req: AppendEntriesRequest<TypeConfig>,
     pub group_id: GroupId,
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct VoteReq {
+    pub vote: VoteRequest<TypeConfig>,
+    pub group_id: GroupId,
+}
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct InstallFullSnapshotReq {
     pub vote: VoteOf<TypeConfig>,
     pub snapshot_meta: SnapshotMeta<TypeConfig>,
     pub snapshot: Vec<u8>,
+    pub group_id: GroupId,
 }

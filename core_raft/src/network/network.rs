@@ -1,7 +1,9 @@
 use crate::network::raft_rocksdb::{GroupId, NodeId, TypeConfig};
 use crate::network::router::Router;
 use crate::server::client::client::RpcMultiClient;
-use crate::server::handler::model::{InstallFullSnapshotReq, PrintTestReq, PrintTestRes};
+use crate::server::handler::model::{
+    AppendEntriesReq, InstallFullSnapshotReq, PrintTestReq, PrintTestRes, VoteReq,
+};
 use openraft::alias::VoteOf;
 use openraft::error::{RPCError, ReplicationClosed, StreamingError};
 use openraft::network::RPCOption;
@@ -16,15 +18,12 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::time::Instant;
 
-const CONNECT_NUM: u32 = 5;
 pub struct NetworkFactory {}
 impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
     type Network = TcpNetwork;
     async fn new_client(&mut self, target: NodeId, node: &BasicNode) -> Self::Network {
         //TODO 定时重连
-        let client = RpcMultiClient::connect(&*node.addr.clone(), CONNECT_NUM)
-            .await
-            .unwrap();
+        let client = RpcMultiClient::connect(&*node.addr.clone()).await.unwrap();
         TcpNetwork {
             addr: node.addr.clone(),
             client,
@@ -32,16 +31,7 @@ impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
         }
     }
 }
-impl NetworkFactory {
-    pub async fn new_tcp(target: NodeId, node: String) -> TcpNetwork {
-        let client = RpcMultiClient::connect(&*node, CONNECT_NUM).await.unwrap();
-        TcpNetwork {
-            addr: node,
-            client,
-            target,
-        }
-    }
-}
+
 #[derive(Clone, Default)]
 pub struct TcpNetwork {
     addr: String,
@@ -75,7 +65,11 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
     ) -> Result<AppendEntriesResponse<TypeConfig>, RPCError<TypeConfig>> {
         let start = Instant::now();
         let is_heartbeat = rpc.entries.is_empty();
-        let res: AppendEntriesResponse<TypeConfig> = self.client.call(7, rpc).await.unwrap();
+        let req = AppendEntriesReq {
+            append_entries_req: rpc,
+            group_id: 0,
+        };
+        let res: AppendEntriesResponse<TypeConfig> = self.client.call(7, req).await.unwrap();
         if is_heartbeat {
             tracing::info!(
                 "append_entries 心跳 往返耗时: {} us",
@@ -95,7 +89,11 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         rpc: VoteRequest<TypeConfig>,
         option: RPCOption,
     ) -> Result<VoteResponse<TypeConfig>, RPCError<TypeConfig>> {
-        let res: VoteResponse<TypeConfig> = self.client.call(6, rpc).await.unwrap_or_else(|e| {
+        let req = VoteReq {
+            vote: rpc,
+            group_id: 0,
+        };
+        let res: VoteResponse<TypeConfig> = self.client.call(6, req).await.unwrap_or_else(|e| {
             eprintln!("RPC call failed: {:?}", e);
             panic!("RPC call failed");
         });
@@ -114,16 +112,8 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
             vote,
             snapshot_meta: snapshot.meta,
             snapshot: data,
+            group_id: 0,
         };
         self.client.call(8, req).await.unwrap()
-    }
-}
-
-pub type MultiNetworkFactory = GroupNetworkFactory<Router, GroupId>;
-impl RaftNetworkFactory<TypeConfig> for MultiNetworkFactory {
-    type Network = GroupNetworkAdapter<TypeConfig, GroupId, Router>;
-
-    async fn new_client(&mut self, target: NodeId, node: &openraft::BasicNode) -> Self::Network {
-        GroupNetworkAdapter::new(self.factory.clone(), target, self.group_id.clone())
     }
 }

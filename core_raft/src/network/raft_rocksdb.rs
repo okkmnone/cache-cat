@@ -1,6 +1,6 @@
 use crate::network::model::{Request, Response};
 use crate::network::network::NetworkFactory;
-use crate::network::node::CacheCatApp;
+use crate::network::node::{App, CacheCatApp};
 use crate::server::handler::model::SetReq;
 use crate::server::handler::rpc;
 use crate::store::rocks_store::new_storage;
@@ -84,14 +84,5 @@ where
     }
     // 根据node_id决定完整的集群配置
 
-    //
-    //
-    // let request = Request::Set(SetReq {
-    //     key: "key".to_string(),
-    //     value: "key".to_string().into(),
-    //     ex_time: 100000,
-    // });
-    // app.raft.client_write(request).await.unwrap();
-
-    rpc::start_server(Arc::new(app)).await
+    rpc::start_server(App::new(vec![app]), addr).await
 }

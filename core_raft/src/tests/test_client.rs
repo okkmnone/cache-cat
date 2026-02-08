@@ -8,7 +8,7 @@ use tokio::time;
 
 #[tokio::test]
 async fn test_add() {
-    let mut client = RpcMultiClient::connect("127.0.0.1:3003", 10).await.unwrap();
+    let mut client = RpcMultiClient::connect("127.0.0.1:3003").await.unwrap();
 
     let mut total_elapsed = Duration::new(0, 0);
     let iterations = 100;

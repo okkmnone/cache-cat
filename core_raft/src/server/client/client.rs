@@ -20,6 +20,7 @@ use tokio_util::codec::{Framed, LengthDelimitedCodec};
 // --- 槽位管理器配置 ---
 const MAX_PENDING: usize = 65536; // 必须是 2 的幂
 const INDEX_MASK: u32 = (MAX_PENDING - 1) as u32;
+const CONNECT_NUM: u32 = 5;
 
 /// 预分配的响应槽位
 struct Slot {
@@ -75,9 +76,9 @@ impl Clone for RpcMultiClient {
 }
 
 impl RpcMultiClient {
-    pub async fn connect(addr: &str, count: u32) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub async fn connect(addr: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
         let mut clients = Vec::new();
-        for _ in 0..count {
+        for _ in 0..CONNECT_NUM {
             let client = RpcClient::connect(addr).await?;
             clients.push(client);
         }
