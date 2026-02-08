@@ -1,4 +1,5 @@
-use crate::network::raft_rocksdb::TypeConfig;
+use crate::network::raft_rocksdb::{NodeId, TypeConfig};
+use crate::network::router::Router;
 use crate::server::client::client::RpcMultiClient;
 use crate::server::handler::model::{InstallFullSnapshotReq, PrintTestReq, PrintTestRes};
 use openraft::alias::VoteOf;
@@ -10,6 +11,7 @@ use openraft::raft::{
 use openraft::{
     BasicNode, OptionalSend, RaftNetworkFactory, RaftNetworkV2, RaftTypeConfig, Snapshot,
 };
+use openraft_multi::{GroupNetworkAdapter, GroupNetworkFactory};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::time::Instant;
@@ -18,7 +20,8 @@ const CONNECT_NUM: u32 = 5;
 pub struct NetworkFactory {}
 impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
     type Network = TcpNetwork;
-    async fn new_client(&mut self, target: u64, node: &BasicNode) -> Self::Network {
+    async fn new_client(&mut self, target: NodeId, node: &BasicNode) -> Self::Network {
+        //TODO 定时重连
         let client = RpcMultiClient::connect(&*node.addr.clone(), CONNECT_NUM)
             .await
             .unwrap();
@@ -30,7 +33,7 @@ impl RaftNetworkFactory<TypeConfig> for NetworkFactory {
     }
 }
 impl NetworkFactory {
-    pub async fn new_tcp(target: u64, node: String) -> TcpNetwork {
+    pub async fn new_tcp(target: NodeId, node: String) -> TcpNetwork {
         let client = RpcMultiClient::connect(&*node, CONNECT_NUM).await.unwrap();
         TcpNetwork {
             addr: node,
@@ -43,7 +46,7 @@ impl NetworkFactory {
 pub struct TcpNetwork {
     addr: String,
     client: RpcMultiClient,
-    target: u64, //nodeid
+    target: NodeId, //nodeid
 }
 impl TcpNetwork {
     async fn request<Req, Resp, Err>(
@@ -115,3 +118,12 @@ impl RaftNetworkV2<TypeConfig> for TcpNetwork {
         self.client.call(8, req).await.unwrap()
     }
 }
+
+// pub type MultiNetworkFactory = GroupNetworkFactory<Router, u16>;
+// impl RaftNetworkFactory<TypeConfig> for MultiNetworkFactory {
+//     type Network = GroupNetworkAdapter<TypeConfig, u16, Router>;
+//
+//     fn new_client(&mut self, target: NodeId, node: &openraft::BasicNode) -> Self::Network {
+//         // GroupNetworkAdapter::new(self.factory.clone(), target, self.group_id.clone())
+//     }
+// }

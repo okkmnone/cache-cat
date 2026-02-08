@@ -1,10 +1,11 @@
+use crate::network::raft_rocksdb::{GroupId, TypeConfig};
 use openraft::alias::VoteOf;
+use openraft::raft::AppendEntriesRequest;
 use openraft::{Snapshot, SnapshotMeta};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::io::Cursor;
 use std::sync::Arc;
-use crate::network::raft_rocksdb::TypeConfig;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PrintTestReq {
@@ -66,6 +67,11 @@ pub struct ExistsReq {
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct ExistsRes {
     pub num: u32,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AppendEntriesReq {
+    pub append_entries_req: AppendEntriesRequest<TypeConfig>,
+    pub group_id: GroupId,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]

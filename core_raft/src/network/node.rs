@@ -1,32 +1,32 @@
 use crate::network::network::NetworkFactory;
-use crate::network::raft_rocksdb::{Raft, StateMachineStore, TypeConfig};
+use crate::network::raft_rocksdb::{GroupId, NodeId, Raft, StateMachineStore, TypeConfig};
 use crate::network::router::Router;
 use crate::store::rocks_store::{StateMachineData, new_storage};
 use openraft::Config;
+use openraft_multi::GroupNetworkFactory;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use openraft_multi::GroupNetworkFactory;
 use tokio::fs;
 use tokio::sync::Mutex;
 
 const GROUP_NUM: i16 = 2;
 
 pub struct CacheCatApp {
-    pub id: u64,
+    pub id: NodeId,
     pub addr: String,
     pub raft: Raft,
-    pub group_id: u16,
+    pub group_id: GroupId,
     pub state_machine: StateMachineStore,
 }
 
 pub struct Node {
-    pub node_id: u64,
-    pub groups: HashMap<u16, CacheCatApp>,
+    pub node_id: NodeId,
+    pub groups: HashMap<GroupId, CacheCatApp>,
     pub router: Router,
 }
 impl Node {
-    pub fn new(node_id: u64, addr: String) -> Self {
+    pub fn new(node_id: NodeId, addr: String) -> Self {
         let router = Router::new(addr.clone());
         Self {
             node_id,
@@ -41,7 +41,6 @@ impl Node {
         raft: Raft,
         state_machine: StateMachineStore,
     ) {
-        Router::new(addr.to_string());
         let app = CacheCatApp {
             id: self.node_id,
             addr: addr.clone(),
@@ -53,7 +52,7 @@ impl Node {
     }
 }
 
-pub async fn create_node<P>(addr: &String, node_id: u64, dir: P) -> Node
+pub async fn create_node<P>(addr: &String, node_id: NodeId, dir: P) -> Node
 where
     P: AsRef<Path>,
 {
