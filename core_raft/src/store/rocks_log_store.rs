@@ -257,7 +257,8 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
             .engine
             .write(&mut batch, false)
             .map(|_| ())
-            .map_err(io::Error::other);
+            .map_err(io::Error::other)?;
+
         let engine = self.engine.clone();
         let _hand = tokio::task::spawn_blocking(move || {
             let res = engine.sync().map(|_| ()).map_err(io::Error::other);
@@ -265,9 +266,9 @@ impl RaftLogStorage<TypeConfig> for RocksLogStore {
             let elapsed = start.elapsed();
             tracing::info!("raft-engine append elapsed: {:?}", elapsed);
         })
-            .instrument(tracing::info_span!("raft-engine-sync"));
+        .instrument(tracing::info_span!("raft-engine-sync"));
         // Return now, and the callback will be invoked later when IO is done.
-        Ok(())
+        Ok(res)
     }
 
     // 如果follower的日志与leader的日志不匹配，follower会删除冲突的日志

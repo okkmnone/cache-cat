@@ -54,9 +54,9 @@ fn multi_raft() -> Result<(), Box<dyn std::error::Error>> {
     // fs::create_dir_all(base)?;
 
     // 在临时目录下创建每个节点的子目录
-    let d1 = TempDir::new_in(base)?;
-    let d2 = TempDir::new_in(base)?;
-    let d3 = TempDir::new_in(base)?;
+    let d1 = TempDir::new_in(base).unwrap().keep();
+    let d2 = TempDir::new_in(base).unwrap().keep();
+    let d3 = TempDir::new_in(base).unwrap().keep();
     // Setup the logger
     // tracing_subscriber::fmt()
     //     .with_target(true)
