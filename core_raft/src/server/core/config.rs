@@ -7,7 +7,7 @@ pub const TWO: &str = "127.0.0.1:3002";
 
 pub const THREE: &str = "127.0.0.1:3003";
 
-pub const GROUP_NUM: i16 = 2;
+pub const GROUP_NUM: i16 = 1;
 pub const TCP_CONNECT_NUM: u32 = 3;
 
 #[derive(Debug, Deserialize, Serialize)]
