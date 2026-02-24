@@ -19,7 +19,7 @@ async fn test_add() {
             .call(
                 2,
                 Request::Set(SetReq {
-                    key: format!("test_{}", i), // 使用不同键避免覆盖
+                    key: Vec::from(format!("test_{}", i)), // 使用不同键避免覆盖
                     value: Vec::from(format!("test_value_{}", i)),
                     ex_time: 0,
                 }),

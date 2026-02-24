@@ -1,5 +1,6 @@
 use crate::network::model::{Request, Response};
 use crate::network::node::{GroupId, TypeConfig};
+use crate::server::core::moka::{MyCache, MyValue};
 use crate::server::handler::model::SetRes;
 use futures::Stream;
 use futures::TryStreamExt;
@@ -19,11 +20,11 @@ use std::io;
 use std::io::Cursor;
 use std::path::Path;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use std::sync::atomic::{AtomicU8, Ordering};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StoredSnapshot {
-    pub meta: openraft::SnapshotMeta<TypeConfig>,
+    pub meta: SnapshotMeta<TypeConfig>,
 
     /// The data of the state machine at the time of this snapshot.
     pub data: Vec<u8>,
@@ -47,21 +48,22 @@ pub struct StateMachineStore {
 pub struct StateMachineData {
     pub last_applied_log_id: Option<LogId<TypeConfig>>,
 
-    pub last_membership: openraft::StoredMembership<TypeConfig>,
+    pub last_membership: StoredMembership<TypeConfig>,
 
     /// State built from applying the raft logs
-    pub kvs: Arc<Mutex<HashMap<String, Vec<u8>>>>,
+    pub kvs: MyCache,
+
+    pub diff_map: Arc<HashMap<Arc<Vec<u8>>, MyValue>>,
+    pub snapshot_state: Arc<AtomicU8>,
 }
 
 impl RaftSnapshotBuilder<TypeConfig> for StateMachineStore {
+    //这里是clone了一个self 然后调用build_snapshot
     async fn build_snapshot(&mut self) -> Result<Snapshot<TypeConfig>, io::Error> {
+        //将快照标记为开始
+        self.data.snapshot_state.store(1, Ordering::SeqCst);
         let last_applied_log = self.data.last_applied_log_id;
         let last_membership = self.data.last_membership.clone();
-
-        let kv_json = {
-            let kvs = self.data.kvs.lock().await;
-            bincode2::serialize(&*kvs).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
-        };
 
         let snapshot_id = if let Some(last) = last_applied_log {
             format!(
@@ -80,6 +82,13 @@ impl RaftSnapshotBuilder<TypeConfig> for StateMachineStore {
             snapshot_id,
         };
 
+
+
+        let kv_json = {
+            let kvs = self.data.kvs;
+            bincode2::serialize(&kvs).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?
+        };
+
         let snapshot = StoredSnapshot {
             meta: meta.clone(),
             data: kv_json.clone(),
@@ -96,11 +105,14 @@ impl RaftSnapshotBuilder<TypeConfig> for StateMachineStore {
 
 impl StateMachineStore {
     pub async fn new(db: Arc<DB>, group_id: GroupId) -> Result<StateMachineStore, io::Error> {
+        let cache = MyCache::new();
         let mut sm = Self {
             data: StateMachineData {
                 last_applied_log_id: None,
                 last_membership: Default::default(),
-                kvs: Arc::new(Mutex::new(HashMap::new())),
+                kvs: cache,
+                diff_map: Arc::new(HashMap::new()),
+                snapshot_state: Arc::new(AtomicU8::new(0)),
             },
             snapshot_idx: 0,
             db,
@@ -120,7 +132,7 @@ impl StateMachineStore {
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         self.data.last_applied_log_id = snapshot.meta.last_log_id;
         self.data.last_membership = snapshot.meta.last_membership.clone();
-        let mut x = self.data.kvs.lock().await;
+        let mut x = self.data.kvs;
         *x = kvs;
         Ok(())
     }
@@ -173,15 +185,17 @@ impl RaftStateMachine<TypeConfig> for StateMachineStore {
             while let Some((entry, responder)) = entries.try_next().await? {
                 self.data.last_applied_log_id = Some(entry.log_id);
 
-                let response = match &entry.payload {
+                let response = match entry.payload {
                     EntryPayload::Blank => Response::none(),
                     EntryPayload::Normal(req) => match req {
                         Request::Set(set_req) => {
                             // 使用结构体的字段名来访问成员
-                            let mut st = self.data.kvs.lock().await;
-                            // println!("set {} = {}", set_req.key,String::from_utf8(set_req.value.clone()).unwrap());
-                            st.insert(set_req.key.clone(), set_req.value.clone());
-                            // 注意：原代码返回的是 value.clone()，现在根据你的业务需求可能需要调整
+                            let st = &self.data.kvs;
+                            let value = MyValue {
+                                data: Arc::new(set_req.value),
+                                ttl_ms: 0,
+                            };
+                            st.insert(Arc::new(set_req.key), value);
                             Response::Set(SetRes {})
                         }
                     },

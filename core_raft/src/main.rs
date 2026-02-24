@@ -47,18 +47,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     multi_raft()
 }
 fn multi_raft() -> Result<(), Box<dyn std::error::Error>> {
-    // let base = r"E:\tmp\raft\raft-engine";
+    let base = "/home/suiyi/cache-cat/tmp";
     // let base_system = r"C:\zdy\temp\raft-engine";
 
-    let base_dir = tempfile::tempdir()?;
-    let base_system = base_dir.path();
+    // let base_dir = tempfile::tempdir()?;
+    // let base_system = base_dir.path();
     // 确保临时目录存在
-    fs::create_dir_all(base_system)?;
+    fs::create_dir_all(base)?;
 
     // 在临时目录下创建每个节点的子目录
-    let d1 = TempDir::new_in(base_system).unwrap().keep();
-    let d2 = TempDir::new_in(base_system).unwrap().keep();
-    let d3 = TempDir::new_in(base_system).unwrap().keep();
+    let d1 = TempDir::new_in(base).unwrap().keep();
+    let d2 = TempDir::new_in(base).unwrap().keep();
+    let d3 = TempDir::new_in(base).unwrap().keep();
     // Setup the logger
     tracing_subscriber::fmt()
         .with_target(true)

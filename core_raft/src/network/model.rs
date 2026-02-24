@@ -9,11 +9,11 @@ pub enum Request {
     Set(SetReq),
 }
 impl Request {
-    pub fn set(key: impl Into<String>, value: impl Into<String>) -> Self {
+    pub fn set(key: impl Into<Vec<u8>>, value: impl Into<Vec<u8>>) -> Self {
         Request::Set(SetReq {
             key: key.into(),
-            value: Vec::from(value.into()),
-            ex_time: 100000,
+            value: value.into(),
+            ex_time: 0,
         })
     }
     pub fn hash_code(&self) -> u64 {

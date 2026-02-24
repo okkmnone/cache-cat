@@ -129,7 +129,7 @@ async fn benchmark_requests(apps: Vec<Arc<CacheCatApp>>) {
         let handle = tokio::spawn(async move {
             for i in 0..num {
                 let request = Request::Set(SetReq {
-                    key: format!("test_{}", i),
+                    key:Vec::from(format!("test_{}", i)),
                     value: Vec::from(format!("value_{}", i)),
                     ex_time: 0,
                 });

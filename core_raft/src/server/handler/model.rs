@@ -1,3 +1,4 @@
+use crate::network::node::{GroupId, TypeConfig};
 use openraft::alias::VoteOf;
 use openraft::raft::{AppendEntriesRequest, VoteRequest};
 use openraft::{Snapshot, SnapshotMeta};
@@ -6,7 +7,6 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 use std::sync::Arc;
-use crate::network::node::{GroupId, TypeConfig};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 pub struct PrintTestReq {
@@ -20,7 +20,7 @@ pub struct PrintTestRes {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Clone)]
 pub struct SetReq {
-    pub key: String,
+    pub key: Vec<u8>,
     pub value: Vec<u8>,
     pub ex_time: u64,
 }
@@ -29,8 +29,8 @@ impl fmt::Display for SetReq {
         write!(
             f,
             "SetReq {{ key: {}, value: {}, ex_time: {} }}",
-            self.key,
-            self.value.len(),
+            String::from_utf8_lossy(&self.key),
+            String::from_utf8_lossy(&self.value),
             self.ex_time
         )
     }

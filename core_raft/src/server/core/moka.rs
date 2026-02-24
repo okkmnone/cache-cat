@@ -1,5 +1,6 @@
 use moka::Expiry;
 use moka::sync::Cache;
+use serde::{Deserialize, Serialize};
 use std::mem::size_of;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -30,53 +31,59 @@ impl MyValue {
 
 struct MyExpiry;
 
-impl Expiry<String, MyValue> for MyExpiry {
+impl Expiry<Arc<Vec<u8>>, MyValue> for MyExpiry {
+    //创建或更新后的定时删除逻辑
     fn expire_after_create(
         &self,
-        _key: &String,
+        _key: &Arc<Vec<u8>>,
         value: &MyValue,
         _created_at: Instant,
     ) -> Option<Duration> {
-        Some(Duration::from_millis(value.ttl_ms))
+        if value.ttl_ms == 0 {
+            None // 永不过期
+        } else {
+            Some(Duration::from_millis(value.ttl_ms))
+        }
     }
 
     fn expire_after_update(
         &self,
-        _key: &String,
+        _key: &Arc<Vec<u8>>,
         value: &MyValue,
         _updated_at: Instant,
         _duration_until_expiry: Option<Duration>,
     ) -> Option<Duration> {
-        Some(Duration::from_millis(value.ttl_ms))
+        if value.ttl_ms == 0 {
+            None
+        } else {
+            Some(Duration::from_millis(value.ttl_ms))
+        }
     }
 }
 
-// =====================
-// Cache 所在的结构体
-// =====================
-
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MyCache {
-    cache: Cache<String, MyValue>,
+    // 内部 Cache的Clone成本是低廉的
+    cache: Cache<Arc<Vec<u8>>, MyValue>,
 }
 
 impl MyCache {
     /// 创建 MyCache 时自动初始化内部 Cache
-    pub fn new(max_capacity: u64) -> Self {
+    pub fn new() -> Self {
         let cache = Cache::builder()
-            .max_capacity(max_capacity)
+            // .max_capacity(max_capacity)
             .expire_after(MyExpiry)
             .build();
-
         Self { cache }
     }
 
     /// 插入值
-    pub fn insert(&self, key: String, value: MyValue) {
+    pub fn insert(&self, key: Arc<Vec<u8>>, value: MyValue) {
         self.cache.insert(key, value);
     }
 
     /// 获取值
-    pub fn get(&self, key: &str) -> Option<MyValue> {
+    pub fn get(&self, key: &Arc<Vec<u8>>) -> Option<MyValue> {
         self.cache.get(key)
     }
 }
