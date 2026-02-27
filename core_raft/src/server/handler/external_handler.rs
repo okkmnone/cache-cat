@@ -14,9 +14,10 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use std::io::Cursor;
 use std::sync::Arc;
 use std::time::Instant;
+use std::sync::LazyLock;
 
+/*
 pub type HandlerEntry = (u32, fn() -> Box<dyn RpcHandler>);
-
 pub static HANDLER_TABLE: &[HandlerEntry] = &[
     (1, || Box::new(RpcMethod { func: print_test })),
     (2, || Box::new(RpcMethod { func: write })),
@@ -33,6 +34,27 @@ pub static HANDLER_TABLE: &[HandlerEntry] = &[
         })
     }),
 ];
+*/
+
+static HANDLER_TABLE: LazyLock<[Option<Box<dyn RpcHandler>>; 128]> = LazyLock::new(|| {
+    std::array::from_fn(|i|
+        match i {
+            1 => Some(Box::new(RpcMethod { func: print_test }) as _),
+            2 => Some(Box::new(RpcMethod { func: write }) as _),
+            3 => Some(Box::new(RpcMethod { func: read }) as _),
+            6 => Some(Box::new(RpcMethod { func: vote }) as _),
+            7 => Some(Box::new(RpcMethod { func: append_entries }) as _),
+            8 => Some(Box::new(RpcMethod { func: install_full_snapshot }) as _),
+            _ => None,
+        }
+    )
+});
+
+#[inline]
+pub fn get_handler(func_id: usize) -> Option<&'static dyn RpcHandler> {
+    HANDLER_TABLE.get(func_id)?.as_ref().map(|boxed| boxed.as_ref())
+}
+
 fn hash_string(s: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
     s.hash(&mut hasher);

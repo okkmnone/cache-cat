@@ -1,6 +1,6 @@
 use crate::network::node::App;
 use crate::server::core::config::init_config;
-use crate::server::handler::external_handler::HANDLER_TABLE;
+use crate::server::handler::external_handler::get_handler;
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use futures::{SinkExt, StreamExt};
 use std::time::Instant;
@@ -111,12 +111,13 @@ pub async fn hand(app: App, tx: UnboundedSender<Bytes>, mut package: Bytes) -> R
     package.advance(8);
 
     // 查找 handler 并调用
-    let handler = HANDLER_TABLE
+    /*let handler = HANDLER_TABLE
         .iter()
         .find(|(id, _)| *id == func_id)
         .map(|(_, ctor)| ctor())
         .ok_or(())?;
-
+    */
+    let handler = get_handler(func_id as usize).ok_or(())?;
     let response_data = handler.call(app, package).await;
 
     // 构造要发送给客户端的 payload：request_id(4) + response_data
