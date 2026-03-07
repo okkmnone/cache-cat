@@ -81,7 +81,9 @@ where
     P: AsRef<Path>,
 {
     let node = create_node(&addr, node_id, dir).await;
-    let apps: Vec<Arc<CacheCatApp>> = node.groups.into_values().map(Arc::new).collect();
+    let apps: Vec<_> = node.groups.into_values().collect();
+    let apps = Arc::new(apps);
+
     let mut nodes = BTreeMap::new();
     if node_id == 3 {
         nodes.insert(
@@ -102,22 +104,22 @@ where
                 addr: THREE.to_string(),
             },
         );
-        for app in &apps {
+        for app in apps.iter() {
             app.raft.initialize(nodes.clone()).await.unwrap();
         }
-        let apps_for_task = apps.clone();
 
+        let apps_for_task = apps.clone();
         tokio::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(3)).await;
             benchmark_requests(apps_for_task).await;
         });
     }
 
-    rpc::start_server(App::new(apps), addr).await
+    rpc::start_server(apps, addr).await
 }
 
 //这个方法用于测试主节点直接迭代状态机
-async fn benchmark_requests(apps: Vec<Arc<CacheCatApp>>) {
+async fn benchmark_requests(apps: Arc<Vec<CacheCatApp>>) {
     println!("Starting benchmark...");
     let start_time = std::time::Instant::now();
     let mut handles = Vec::new();

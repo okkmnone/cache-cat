@@ -29,7 +29,7 @@ impl Drop for FileStore {
     fn drop(&mut self) {
         //销毁的时候如果文件存在，则删除文件
         if Path::new(&self.path).exists() {
-            std::fs::remove_file(&self.path);
+            std::fs::remove_file(&self.path).unwrap();
         }
     }
 }
@@ -60,7 +60,7 @@ pub struct StateMachineData {
     /// State built from applying the raft logs
     pub kvs: MyCache,
 
-    pub diff_map: Arc<HashMap<Arc<Vec<u8>>, MyValue>>,
+    pub diff_map: HashMap<Arc<Vec<u8>>, MyValue>,
     pub snapshot_state: Arc<AtomicU8>,
 }
 
@@ -115,7 +115,7 @@ impl StateMachineStore {
                 last_applied_log_id: None,
                 last_membership: Default::default(),
                 kvs: cache.clone(),
-                diff_map: Arc::new(HashMap::new()),
+                diff_map: HashMap::new(),
                 snapshot_state: Arc::new(AtomicU8::new(0)),
             },
             path: path.clone(),

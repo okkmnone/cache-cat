@@ -35,7 +35,7 @@ pub struct CacheCatApp {
     pub state_machine: StateMachineStore,
     pub path: PathBuf,
 }
-pub type App = Arc<Vec<Arc<CacheCatApp>>>;
+pub type App = Arc<Vec<CacheCatApp>>;
 pub fn get_app(app: &App, group_id: GroupId) -> &CacheCatApp {
     app.iter().find(|app| app.group_id == group_id).unwrap()
 }
@@ -79,7 +79,7 @@ pub async fn create_node<P>(addr: &str, node_id: NodeId, dir: P) -> Node
 where
     P: AsRef<Path>,
 {
-    let path = dir.as_ref().join("");
+    let path = dir.as_ref().join(".bin");
     let mut node = Node::new(node_id, addr.to_string());
     let raft_engine = dir.as_ref().join("raft-engine");
     let engine = create_raft_engine(raft_engine.clone());

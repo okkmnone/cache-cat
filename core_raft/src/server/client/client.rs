@@ -84,7 +84,7 @@ impl RpcMultiClient {
     pub async fn connect(
         addr: &str,
         node_id: NodeId,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut clients = Vec::new();
         for _ in 0..TCP_CONNECT_NUM {
             let client = RpcClient::connect(addr).await?;
@@ -100,7 +100,7 @@ impl RpcMultiClient {
         addr: &str,
         connect_num: usize,
         node_id: NodeId,
-    ) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    ) -> Result<Self, Box<dyn Error>> {
         let mut clients = Vec::new();
         for _ in 0..connect_num {
             let client = RpcClient::connect(addr).await?;
@@ -131,7 +131,7 @@ pub struct RpcClient {
 }
 
 impl RpcClient {
-    pub async fn connect(addr: &str) -> Result<Self, Box<dyn Error + Send + Sync>> {
+    pub async fn connect(addr: &str) -> Result<Self, Box<dyn Error>> {
         let mut stream = TcpStream::connect(addr).await?;
         stream.set_nodelay(true)?; // RPC 必须关闭 Nagle 算法以降低延迟
         stream.write_all(&[0u8]).await?;

@@ -69,7 +69,7 @@ impl FileOperator {
 
     /// 发送文件（使用硬链接路径），返回 send_file_once 的结果（成功时返回 Uuid）。
     /// 注意：这里不删除硬链接，删除由 Drop 完成（或手动调用 close）。
-    pub async fn send_file(&self, addr: &str) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
+    pub async fn send_file(&self, addr: &str) -> Result<Uuid, Box<dyn Error>> {
         let hardlink_path = self.get_hard_link_buf();
         let uuid = send_file_once(addr, self.group_id as u32, hardlink_path, self.uuid).await?;
         Ok(uuid)
@@ -101,7 +101,7 @@ pub async fn send_file_once<P: AsRef<Path>>(
     group_id: u32,
     file_path: P,
     uuid: Uuid,
-) -> Result<Uuid, Box<dyn Error + Send + Sync>> {
+) -> Result<Uuid, Box<dyn Error>> {
     // 连接
     let mut stream = TcpStream::connect(addr).await?;
     // 关闭 Nagle 以降低延迟 / 确保小包快速发出（与服务端一致）
@@ -130,7 +130,7 @@ pub async fn send_file_once<P: AsRef<Path>>(
 }
 
 #[tokio::test]
-async fn test_send_file_once() -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn test_send_file_once() -> Result<(), Box<dyn Error>> {
     // 示例用法（替换为实际地址、group_id、文件路径）
     let group_id = 1;
     let path = "E:/tmp/raft/1.png";
@@ -142,7 +142,7 @@ async fn test_send_file_once() -> Result<(), Box<dyn Error + Send + Sync>> {
 }
 
 #[tokio::test]
-async fn test_file_operator() -> Result<(), Box<dyn Error + Send + Sync>> {
+async fn test_file_operator() -> Result<(), Box<dyn Error>> {
     // 示例用法（替换为实际地址、group_id、文件路径）
     let group_id = 1;
     let path = "E:/tmp/raft";
