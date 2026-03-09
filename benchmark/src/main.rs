@@ -63,6 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ">>> 吞吐量测试 - {}并发/{}请求 <<<",
             args.clients, args.total
         );
+        /*
         println!(">>> 预热阶段 - 发送 {} 个请求 <<<", args.warmup);
 
         run_engine(
@@ -75,7 +76,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
 
         println!(">>> 预热完成，正式测试即将开始 <<<");
+        */
     }
+
     println!(
         "====== 性能测试开始 | Target: {} | Mode: {} | Op: {} ======",
         args.target, args.mode, args.op
@@ -173,9 +176,7 @@ async fn run_engine(
 
             for i in 0..tasks_per_client {
                 let start = Instant::now();
-                let success;
-
-                if op == "write" {
+                let success = if op == "write" {
                     let res: Result<ClientWriteResponse<TypeConfig>, _> = client_c
                         .call(
                             2,
@@ -186,7 +187,7 @@ async fn run_engine(
                             }),
                         )
                         .await;
-                    success = res.is_ok();
+                    res.is_ok()
                 } else {
                     let res: Result<PrintTestRes, _> = client_c
                         .call(
@@ -196,9 +197,15 @@ async fn run_engine(
                             },
                         )
                         .await;
-                    success = res.is_ok();
-                }
-
+                    match res {
+                        Ok(_) => { true },
+                        Err(err) => {
+                            println!("{}", err);
+                            false
+                        },
+                    }
+                };
+                
                 if success {
                     let duration = start.elapsed();
 

@@ -1,3 +1,4 @@
+use core_raft::error::CoreRaftResult;
 use core_raft::network;
 use core_raft::network::node::TypeConfig;
 use core_raft::network::raft::start_multi_raft_app;
@@ -32,7 +33,7 @@ fn init_flamegraph(
     Ok(guard)
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> CoreRaftResult<()> {
     #[cfg(feature = "tokio-console")]
     {
         console_subscriber::ConsoleLayer::builder()
@@ -46,31 +47,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _flame_guard = init_flamegraph("./flamegraph.folded")?;
     multi_raft()
 }
-fn multi_raft() -> Result<(), Box<dyn std::error::Error>> {
-    let base = "/home/suiyi/cache-cat/tmp";
-    let base = r"E:/tmp/raft/raft-engine";
+
+fn multi_raft() -> CoreRaftResult<()> {
+    let base = if cfg!(windows) {
+        std::path::PathBuf::from(r"E:/tmp/raft/raft-engine")
+    } else {
+        dirs::home_dir().unwrap().join("cache-cat").join("tmp")
+    };
     // let base_system = r"C:\zdy\temp\raft-engine";
 
     // let base_dir = tempfile::tempdir()?;
     // let base_system = base_dir.path();
     // 确保临时目录存在
-    fs::create_dir_all(base)?;
+    fs::create_dir_all(&base)?;
 
-    // 在临时目录下创建每个节点的子目录
-    let d1 = tempfile::Builder::new()
-        .suffix("_1")
-        .tempdir_in(base)?
-        .keep();
-
-    let d2 = tempfile::Builder::new()
-        .suffix("_2")
-        .tempdir_in(base)?
-        .keep();
-
-    let d3 = tempfile::Builder::new()
-        .suffix("_3")
-        .tempdir_in(base)?
-        .keep();
     // Setup the logger
     tracing_subscriber::fmt()
         .with_target(true)
@@ -109,37 +99,33 @@ fn multi_raft() -> Result<(), Box<dyn std::error::Error>> {
     //     let _ = tokio::join!(t1, t2, t3);
     // });
 
-    let _h1 = thread::spawn(move || {
-        let rt = Builder::new_multi_thread()
-            .max_blocking_threads(512)
-            .worker_threads(num_cpus / 3)
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime");
-        let result = rt.block_on(start_multi_raft_app(1, d1, String::from(ONE)));
-    });
+    let handles: Vec<_> = [ONE, TWO, THREE].into_iter().enumerate().map(|(i, addr)| {
+            // 在临时目录下创建每个节点的子目录
+            let dir = tempfile::Builder::new()
+                .suffix(&format!("_{}", i + 1))
+                .tempdir_in(&base)
+                .unwrap()
+                .keep();
 
-    let _h3 = thread::spawn(move || {
-        let rt = Builder::new_multi_thread()
-            .max_blocking_threads(512)
-            .worker_threads(num_cpus / 3)
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime");
-        let x = rt.block_on(start_multi_raft_app(3, d3, String::from(THREE)));
-    });
+            let h = thread::spawn(move || {
+                thread::sleep(Duration::from_millis(500 * i as u64));
 
-    // sleep(Duration::from_secs(11));
-    let _h2 = thread::spawn(move || {
-        let rt = Builder::new_multi_thread()
-            .max_blocking_threads(512)
-            .worker_threads(num_cpus / 3)
-            .enable_all()
-            .build()
-            .expect("Failed to create Tokio runtime");
-        let x = rt.block_on(start_multi_raft_app(2, d2, String::from(TWO)));
-    });
-    sleep(Duration::from_secs(40000));
+                let rt = Builder::new_multi_thread()
+                    .max_blocking_threads(512)
+                    .worker_threads(num_cpus / 3)
+                    .enable_all()
+                    .build()
+                    .expect("Failed to create Tokio runtime");
+
+                let node_id = (i + 1) as u16;
+                println!("<i: {}>, node_id: {}, addr: {}, dir: {}", i, node_id, addr, dir.display());
+                let result = rt.block_on(start_multi_raft_app(node_id, dir, String::from(addr)));
+            });
+            h
+        })
+        .collect();
+    handles.into_iter().for_each(|h| h.join().unwrap());
+
     Ok(())
 }
 

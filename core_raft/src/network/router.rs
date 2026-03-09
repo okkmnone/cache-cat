@@ -1,13 +1,12 @@
+use crate::error::CoreRaftError;
 use crate::network::node::{GroupId, NodeId, TypeConfig};
-use crate::server::client::client::{RpcClient, RpcMultiClient};
+use crate::server::client::client::RpcMultiClient;
 use crate::server::handler::model::{AppendEntriesReq, InstallFullSnapshotReq, VoteReq};
 
 use dashmap::DashMap;
 use openraft::RPCTypes::InstallSnapshot;
 use openraft::alias::VoteOf;
-use openraft::error::{
-    RPCError, RemoteError, ReplicationClosed, StreamingError, Timeout, Unreachable,
-};
+use openraft::error::{RPCError, ReplicationClosed, StreamingError, Timeout, Unreachable};
 use openraft::network::RPCOption;
 use openraft::raft::{
     AppendEntriesRequest, AppendEntriesResponse, SnapshotResponse, VoteRequest, VoteResponse,
@@ -105,7 +104,26 @@ impl GroupRouter<TypeConfig, GroupId> for Router {
                     target as u64
                 ))))
             }
-            Some(client) => client.call(7, req).await,
+            Some(client) => {
+                let start = Instant::now();
+                let result = client.call(7, req).await;
+                let elapsed = start.elapsed();
+                tracing::info!(
+                    "RPC call slave to node {} took {:?}",
+                    target as u64,
+                    elapsed
+                );
+                match result {
+                    Ok(r) => Ok(r),
+                    Err(e) => {
+                        tracing::info!("RPC call to node {} failed: {:?}", target as u64, e);
+                        Err(RPCError::Unreachable(Unreachable::from_string(format!(
+                            "RPC call to node {} failed: {:?}",
+                            target as u64, e
+                        ))))
+                    }
+                }
+            }
         }
     }
 
@@ -132,7 +150,14 @@ impl GroupRouter<TypeConfig, GroupId> for Router {
                     target as u64
                 ))))
             }
-            Some(client) => client.call(6, req).await,
+            Some(client) => match client.call(6, req).await {
+                Ok(r) => Ok(r),
+                Err(CoreRaftError::OpenraftRPCError(e)) => Err(e),
+                Err(e) => Err(RPCError::Unreachable(Unreachable::from_string(format!(
+                    "node {}: other error<{:?}>",
+                    target as u64, e
+                )))),
+            },
         }
     }
 
@@ -182,8 +207,21 @@ impl GroupRouter<TypeConfig, GroupId> for Router {
             snapshot: snapshot.snapshot,
             group_id,
         };
+        
+        let result = client.call(8, req).await;
+        match result {
+            Ok(resp) => Ok(resp),
+            Err(CoreRaftError::OpenraftRPCError(e)) => Err(StreamingError::Unreachable(
+                Unreachable::from_string(format!("node {}: other error2<{:?}>", target as u64, e)),
+            )),
+            Err(CoreRaftError::OpenraftStreamingError(e)) => Err(e),
+            Err(e) => {
+                tracing::info!("snapshot RPC to node {} failed: {:?}", target as u64, e);
 
-        let result = client.call(8, req).await?;
-        Ok(result)
+                Err(StreamingError::Unreachable(Unreachable::from_string(
+                    format!("snapshot RPC to node {} failed: {:?}", target as u64, e),
+                )))
+            }
+        }
     }
 }
